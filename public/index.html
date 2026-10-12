@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TMX Gotham</title>
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600&family=Limelight&display=swap" rel="stylesheet">
+<style>
+  :root { --brass:#c9a24a; --amber:#ffcf7a; --fog:#8b97ab; --text:#e9edf5;
+    --cut: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px); }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#131a26; color:var(--text); font:400 14px/1.45 "Josefin Sans",system-ui,sans-serif; overflow:hidden; }
+  canvas { display:block; }
+  .panel { position:relative; padding:1px; background:var(--brass); clip-path:var(--cut); flex:none; }
+  .panel > .in { background:rgba(13,17,25,.9); clip-path:var(--cut); padding:14px 16px; }
+  #left { position:fixed; top:16px; left:16px; width:min(330px,calc(100vw - 32px)); display:flex; flex-direction:column; gap:10px;
+    max-height:calc(100vh - 32px); overflow-y:auto; scrollbar-width:thin; }
+  #card, #notice { position:fixed; }
+  h1 { margin:0; font:400 30px/1.05 Limelight,serif; letter-spacing:.03em; color:var(--amber); }
+  #status { margin:4px 0 10px; color:var(--fog); }
+  #perf { margin:8px 0 0; color:var(--fog); font-size:12px; }
+  input[type=search], select { width:100%; padding:8px 10px; border:1px solid rgba(201,162,74,.5); background:rgba(255,255,255,.06);
+    color:var(--text); font:inherit; border-radius:2px; }
+  select option { background:#10151f; }
+  input::placeholder { color:var(--fog); }
+  .btns { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .btn { padding:6px 10px; font:600 13px "Josefin Sans",sans-serif; color:var(--text); background:transparent;
+    border:1px solid rgba(201,162,74,.55); border-radius:2px; cursor:pointer; }
+  .btn:hover { background:rgba(201,162,74,.2); }
+  .btn[aria-pressed="true"] { background:rgba(201,162,74,.28); color:var(--amber); border-color:var(--brass); }
+  details { margin:0; } details + details { margin-top:8px; border-top:1px solid rgba(201,162,74,.25); padding-top:8px; }
+  summary { cursor:pointer; font:400 18px Limelight,serif; color:var(--amber); }
+  .row { display:grid; grid-template-columns:1fr auto; gap:2px 8px; margin:9px 0 0; }
+  .row input[type=range] { grid-column:1 / -1; width:100%; accent-color:var(--brass); }
+  .row .v { color:var(--amber); }
+  .check { display:flex; gap:8px; align-items:center; margin:9px 0 0; }
+  .legend { margin:8px 0 0; padding:0; list-style:none; color:var(--fog); }
+  .legend li { margin-top:3px; } .legend b { color:var(--amber); font-weight:600; }
+  .hint { color:var(--fog); font-size:12px; margin:8px 0 0; }
+  #card { right:16px; bottom:16px; width:min(290px,calc(100vw - 32px)); display:none; }
+  #card h2 { margin:0 0 6px; font:400 24px/1.1 Limelight,serif; color:var(--amber); word-break:break-word; }
+  #card dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:2px 14px; }
+  #card dt { color:var(--fog); } #card dd { margin:0; text-align:right; }
+  #card a { color:var(--amber); display:inline-block; margin-top:8px; }
+  #tip { position:fixed; pointer-events:none; padding:4px 8px; display:none; white-space:nowrap; background:rgba(13,17,25,.92); border:1px solid var(--brass); }
+  #notice { top:16px; right:16px; max-width:290px; display:none; color:var(--amber); }
+  :focus-visible { outline:2px solid var(--amber); outline-offset:2px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="left">
+  <section class="panel"><div class="in">
+    <h1>TMX Gotham</h1>
+    <p id="status">Building the city…</p>
+    <input id="search" type="search" placeholder="Find a player, press Enter" aria-label="Find a player">
+    <div class="btns"><button class="btn" id="tSettings" aria-pressed="true">Settings</button></div>
+    <p id="perf"></p>
+    <details style="margin-top:8px"><summary>Reading the city</summary><ul class="legend">
+      <li><b>Height</b> follows maps uploaded</li>
+      <li><b>Gold trim</b> grows with awards received</li>
+      <li><b>Spire</b> 1+ awards, <b>lantern</b> 10+, <b>beacon</b> 50+</li>
+      <li><b>Downtown</b> is the top of whichever order you pick</li>
+    </ul></details>
+  </div></section>
+  <section class="panel" id="settings"><div class="in" id="settingsBody"></div></section>
+</div>
+<section id="notice" class="panel"><div class="in">No users.json found, showing demo data. Run <code>npm run fetch</code> first.</div></section>
+<section id="card" class="panel"><div class="in" id="cardBody"></div></section>
+<div id="tip"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = (id) => document.getElementById(id);
+const LOT = 3.2;       // world size of one lot
+const CH = 24;         // lots per chunk side (~77 units): the unit of culling
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mod = (n, m) => ((n % m) + m) % m;
+const hash = (i) => { const s = Math.sin(i * 12.9898) * 43758.5453; return s - Math.floor(s); };
+
+// ============================ data ============================
+async function loadUsers() {
+  try {
+    const r = await fetch('users.json'); if (!r.ok) throw new Error();
+    const d = await r.json(); if (!Array.isArray(d) || !d.length) throw new Error();
+    return { users: d, demo: false };
+  } catch { return { users: demoUsers(), demo: true }; }
+}
+function demoUsers() {
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  return Array.from({ length: 30000 }, (_, i) => {
+    const maps = rnd() < 0.7 ? 0 : Math.floor(Math.pow(rnd(), 6) * 800);
+    return { UserId: i + 1, Name: 'Demo' + (i + 1), MapCount: maps,
+      AwardsReceivedCount: Math.floor(Math.pow(rnd(), 8) * maps * 0.6), RegisteredAt: new Date(1.5e12 + i * 8e6).toISOString() };
+  });
+}
+const { users: allUsers, demo } = await loadUsers();
+if (demo) $('notice').style.display = 'block';
+await new Promise((r) => requestAnimationFrame(r));
+
+// ============================ settings ============================
+const LEVELS = [
+  { res: 0.50, view: 240, rain: 0,    glow: 0,    win: 0 },
+  { res: 0.60, view: 300, rain: 0,    glow: 0,    win: 90 },
+  { res: 0.75, view: 380, rain: 0,    glow: 0,    win: 140 },
+  { res: 0.90, view: 460, rain: 1500, glow: 0,    win: 200 },
+  { res: 1.00, view: 560, rain: 3000, glow: 0.45, win: 260 },
+  { res: 1.25, view: 700, rain: 4500, glow: 0.60, win: 320 },
+  { res: 1.50, view: 850, rain: 6000, glow: 0.80, win: 380 },
+];
+const gfx = { auto: true, level: 3, res: 0.9, view: 460, fogMul: 1, rain: 1500, glow: 0, win: 200, lightning: true };
+const state = { order: 'maps', topN: allUsers.length, minMaps: 0, minAwards: 0, hScale: 1, speed: 80 };
+try {
+  const s = JSON.parse(localStorage.getItem('tmxGotham') || 'null');
+  if (s) { Object.assign(gfx, s.gfx || {}); Object.assign(state, s.state || {}); }
+} catch { /* storage unavailable */ }
+state.topN = Math.min(state.topN || allUsers.length, allUsers.length);
+const save = () => { try { localStorage.setItem('tmxGotham', JSON.stringify({ gfx, state })); } catch { /* ignore */ } };
+
+// ============================ renderer / shared uniforms ============================
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 3500);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 6; controls.maxDistance = 1500;
+
+const baseFog = new THREE.Color().setRGB(0.075, 0.10, 0.15), fogCol = baseFog.clone();
+const moonDir = new THREE.Vector3(-0.55, 0.4, -0.65).normalize();
+const rimDir = new THREE.Vector3(0.7, 0.25, 0.55).normalize();
+const SH = {
+  uTime: { value: 0 }, uFlash: { value: 0 }, uFog: { value: fogCol }, uFogD: { value: 0.004 },
+  uWinDist: { value: 200 }, uDetail: { value: 1 },
+  uMoonDir: { value: moonDir }, uMoonCol: { value: new THREE.Color(1.1, 1.4, 2.4) },
+  uRimDir: { value: rimDir }, uRimCol: { value: new THREE.Color(1.3, 0.8, 0.4) },
+  uHemiSky: { value: new THREE.Color(0.35, 0.45, 0.75) }, uHemiGround: { value: new THREE.Color(0.07, 0.07, 0.10) },
+};
+
+// optional glow (bloom) - only created if the glow slider is above zero
+let composer = null, bloom = null;
+function ensureComposer() {
+  if (composer) return;
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType }));
+  composer.addPass(new RenderPass(scene, camera));
+  bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.5, 0.6);
+  composer.addPass(bloom); composer.addPass(new OutputPass());
+  composer.setPixelRatio(gfx.res); composer.setSize(innerWidth, innerHeight);
+}
+function setRes(r) {
+  renderer.setPixelRatio(r); renderer.setSize(innerWidth, innerHeight);
+  if (composer) { composer.setPixelRatio(r); composer.setSize(innerWidth, innerHeight); }
+}
+
+// ============================ shaders ============================
+const BODY_VS = `
+attribute vec3 aPos; attribute vec3 aSize; attribute vec3 aCol; attribute vec2 aMeta;
+uniform vec3 uMoonDir, uMoonCol, uRimDir, uRimCol, uHemiSky, uHemiGround; uniform float uFlash;
+varying vec3 vWP; varying vec3 vN; varying vec3 vCol; varying vec3 vLight; varying vec2 vMeta;
+varying float vH; varying float vLocalY; varying float vSeed;
+void main(){
+  vec3 wp = aPos + position * aSize;
+  vWP = wp; vN = normal; vCol = aCol; vMeta = aMeta; vH = aSize.y; vLocalY = position.y;
+  vSeed = fract(sin(dot(aPos.xz, vec2(12.9898, 78.233))) * 43758.5453);
+  vec3 hemi = mix(uHemiGround, uHemiSky, normal.y * 0.5 + 0.5) * (1.0 + uFlash * 5.0);
+  vLight = hemi + uMoonCol * max(dot(normal, uMoonDir), 0.0) + uRimCol * max(dot(normal, uRimDir), 0.0);
+  gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+}`;
+const BODY_FS = `
+uniform vec3 uFog; uniform float uFogD, uTime, uWinDist, uDetail;
+varying vec3 vWP; varying vec3 vN; varying vec3 vCol; varying vec3 vLight; varying vec2 vMeta;
+varying float vH; varying float vLocalY; varying float vSeed;
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main(){
+  float dist = length(vWP - cameraPosition);
+  vec3 col = vCol * vLight;
+  vec3 emi = vec3(0.0);
+  if (vMeta.y > 1.5) {                     // beacon
+    col = vec3(0.0);
+    emi = vec3(1.6, 1.1, 0.45) * (1.4 + 0.6 * sin(uTime * 2.2 + vSeed * 6.28));
+  } else if (vMeta.y > 0.5) {              // spire
+    col = vec3(0.9, 0.95, 1.1) * vLight * 0.35;
+  } else if (abs(vN.y) < 0.5) {            // facade
+    bool fx = abs(vN.x) > 0.5;
+    float hc = fx ? vWP.z : vWP.x;
+    float lh = vLocalY * vH;
+    float bandH = min(0.8, vH * 0.5);
+    float fr = uDetail > 0.5 ? smoothstep(uWinDist * 0.45, uWinDist, dist) : 1.0;
+    float band = step(vH - bandH, lh);
+    vec3 brass = mix(vec3(0.30, 0.30, 0.34), vec3(0.95, 0.72, 0.26), vMeta.x);
+    vec3 farGlow = vec3(1.0, 0.74, 0.40) * 0.085 * (1.0 - 0.5 * vSeed);
+    if (fr < 0.999) {
+      vec2 g = vec2(hc / 1.9, vWP.y / 1.45);
+      vec2 id = floor(g) + (fx ? vec2(0.0) : vec2(41.0, 13.0));
+      vec2 f = fract(g);
+      float pil = 1.0 - step(0.2, f.x);
+      float win = step(0.32, f.x) * step(f.x, 0.9) * step(0.16, f.y) * step(f.y, 0.84) * step(1.3, lh) * step(lh, vH - bandH - 0.2);
+      float lit = step(0.25 + 0.45 * vSeed, h21(id + vSeed * 91.0)) * win;
+      vec3 wc = mix(vec3(1.0, 0.76, 0.40), vec3(0.72, 0.86, 1.0), step(0.88, h21(id + 7.0)));
+      float bs = 1.0 - step(1.1, lh);
+      float shop = bs * step(0.5, h21(id + 3.0));
+      col *= (1.0 + 0.16 * pil) * (1.0 - 0.45 * win * (1.0 - lit)) * (1.0 - 0.35 * bs);
+      emi += mix(wc * lit * 0.95 + vec3(1.0, 0.7, 0.35) * shop * 0.3, farGlow, fr);
+    } else { emi += farGlow; }
+    col = mix(col, brass * vLight * 2.0, band);
+    emi += brass * vMeta.x * band * 0.55 * (1.0 - 0.5 * fr);
+  } else if (vN.y > 0.5) { col *= 0.7; }
+  float fog = 1.0 - exp(-uFogD * uFogD * dist * dist);
+  gl_FragColor = vec4(mix(col + emi, uFog, fog), 1.0);
+  #include <colorspace_fragment>
+}`;
+const GROUND_VS = `varying vec3 vWP; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWP = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const GROUND_FS = `
+uniform vec3 uFog, uMoonDir, uMoonCol, uRimDir, uRimCol, uHemiSky; uniform float uFogD, uFlash;
+varying vec3 vWP;
+void main(){
+  vec2 gc = vWP.xz / ${LOT.toFixed(3)} + 0.5; vec2 cell = floor(gc); vec2 fc = fract(gc);
+  float sx = step(3.5, mod(cell.x, 5.0)); float sy = step(3.5, mod(cell.y, 5.0));
+  float street = max(sx, sy);
+  float dist = length(vWP - cameraPosition);
+  float nr = 1.0 - smoothstep(110.0, 360.0, dist);
+  float edge = min(min(fc.x, 1.0 - fc.x), min(fc.y, 1.0 - fc.y));
+  vec3 slab = vec3(0.040, 0.045, 0.056) * (1.0 + 0.7 * smoothstep(0.07, 0.0, edge) * nr);
+  vec3 alb = mix(slab, vec3(0.010, 0.012, 0.018), street);
+  float laneV = sx * (1.0 - sy) * step(abs(fc.x - 0.5), 0.025) * step(0.5, fract(vWP.z / 1.6));
+  float laneH = sy * (1.0 - sx) * step(abs(fc.y - 0.5), 0.025) * step(0.5, fract(vWP.x / 1.6));
+  alb += vec3(0.30, 0.24, 0.10) * (laneV + laneH) * nr;
+  vec3 L = (uHemiSky * 0.6 + uMoonCol * uMoonDir.y * 0.7 + uRimCol * uRimDir.y * 0.4) * (1.0 + uFlash * 4.0);
+  vec3 col = alb * L;
+  vec3 v = normalize(cameraPosition - vWP);
+  vec3 r = vec3(-v.x, v.y, -v.z);
+  col += (pow(max(dot(r, uMoonDir), 0.0), 40.0) * 0.35 * uMoonCol + pow(max(dot(r, uRimDir), 0.0), 30.0) * 0.25 * uRimCol) * street * nr;
+  col += vec3(1.0, 0.70, 0.36) * exp(-length(fc - 0.5) * 9.0) * street * 0.42 * nr;
+  float fog = 1.0 - exp(-uFogD * uFogD * dist * dist);
+  gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+const bodyMat = new THREE.ShaderMaterial({ uniforms: SH, vertexShader: BODY_VS, fragmentShader: BODY_FS });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.ShaderMaterial({ uniforms: SH, vertexShader: GROUND_VS, fragmentShader: GROUND_FS }));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+// sky: drawn last so pixels covered by buildings are rejected by the depth test before the cloud shader runs
+const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { uTime: SH.uTime, uFlash: SH.uFlash, uHorizon: { value: fogCol }, uMoon: { value: moonDir } },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `
+    varying vec3 vDir; uniform float uTime, uFlash; uniform vec3 uHorizon, uMoon;
+    float hs(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+      return mix(mix(hs(i),hs(i+vec2(1,0)),f.x), mix(hs(i+vec2(0,1)),hs(i+vec2(1,1)),f.x), f.y); }
+    void main(){
+      vec3 d = normalize(vDir);
+      float h = clamp(d.y, 0.0, 1.0);
+      vec3 col = mix(uHorizon, vec3(0.010,0.015,0.028), pow(h, 0.45));
+      float md = max(dot(d, uMoon), 0.0);
+      float c = 0.0;
+      if (d.y > 0.0) {
+        vec2 uv = d.xz / (d.y + 0.22) * 1.8 + vec2(uTime*0.012, uTime*0.006);
+        c = smoothstep(0.38, 0.85, 0.55*vn(uv) + 0.30*vn(uv*2.03) + 0.15*vn(uv*4.1));
+      }
+      vec3 cloud = mix(vec3(0.025,0.035,0.055), vec3(0.30,0.36,0.47), pow(md, 5.0)) + uHorizon*0.5;
+      col = mix(col, cloud, c * smoothstep(0.0, 0.18, d.y) * 0.92);
+      col += vec3(0.75,0.85,1.0) * pow(md, 600.0) * 1.6 + vec3(0.22,0.30,0.50) * pow(md, 14.0) * 0.28;
+      col += uFlash * vec3(0.45,0.5,0.7) * (0.25 + c);
+      gl_FragColor = vec4(col, 1.0);
+      #include <colorspace_fragment>
+    }`,
+}));
+sky.renderOrder = 999; sky.frustumCulled = false; scene.add(sky);
+
+// ============================ bat signal (generic bat silhouette on the clouds) ============================
+const BEAM = 420;
+const beamDir = new THREE.Vector3(-0.9, 1.0, 0.1).normalize();
+const lampMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 1.4, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 1.7, 1.4) }));
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(24, 1.2, BEAM, 28, 1, true).translate(0, BEAM / 2, 0), new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+  vertexShader: `varying float vY; varying float vF; void main(){ vY = position.y / ${BEAM}.0;
+    vec3 n = normalize(normalMatrix * normal); vec3 v = normalize(-(modelViewMatrix * vec4(position,1.0)).xyz);
+    vF = pow(abs(dot(n, v)), 1.4); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying float vY; varying float vF; void main(){
+    float a = pow(1.0 - vY, 1.3) * 0.30 * vF; gl_FragColor = vec4(vec3(0.80, 0.88, 1.0) * a, 1.0); #include <colorspace_fragment> }`,
+}));
+beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), beamDir);
+const cv = document.createElement('canvas'); cv.width = cv.height = 512;
+{
+  const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 512, 512);
+  const rg = g.createRadialGradient(256, 256, 0, 256, 256, 256);
+  rg.addColorStop(0, 'rgba(255,246,220,0.95)'); rg.addColorStop(0.62, 'rgba(255,238,200,0.85)');
+  rg.addColorStop(0.9, 'rgba(255,230,190,0.15)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, 512, 512);
+  const Rt = [[0,-8],[4.5,-22],[8.5,-9.5],[24,-13],[46,-20],[62,-10],[54,-4],[46,-1],[40,6],[32,2],[24,9],[16,6],[10,16],[5,9],[0,13]];
+  const s = 2.0, cx = 256, cy = 262;
+  g.beginPath(); g.moveTo(cx + Rt[0][0] * s, cy + Rt[0][1] * s);
+  for (const [x, y] of Rt) g.lineTo(cx + x * s, cy + y * s);
+  for (let k = Rt.length - 2; k >= 0; k--) g.lineTo(cx - Rt[k][0] * s, cy + Rt[k][1] * s);
+  g.closePath(); g.fillStyle = '#000'; g.fill();
+}
+const sigTex = new THREE.CanvasTexture(cv); sigTex.colorSpace = THREE.SRGBColorSpace;
+const disc = new THREE.Mesh(new THREE.PlaneGeometry(190, 190), new THREE.MeshBasicMaterial({
+  map: sigTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.85 }));
+const sigGroup = new THREE.Group(); sigGroup.add(lampMesh, beam, disc); scene.add(sigGroup);
+
+// ============================ rain (GPU-animated lines; draw range = amount) ============================
+const RAIN_MAX = 8000, BOX = 220;
+const rp = new Float32Array(RAIN_MAX * 6), re = new Float32Array(RAIN_MAX * 2);
+for (let i = 0; i < RAIN_MAX; i++) {
+  const x = Math.random() * BOX, y = Math.random() * 90, z = Math.random() * BOX;
+  rp.set([x, y, z, x, y, z], i * 6); re[i * 2 + 1] = 1;
+}
+const rg2 = new THREE.BufferGeometry();
+rg2.setAttribute('position', new THREE.BufferAttribute(rp, 3)); rg2.setAttribute('aEnd', new THREE.BufferAttribute(re, 1));
+const rainMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, fog: false,
+  uniforms: { uTime: SH.uTime, uCam: { value: camera.position } },
+  vertexShader: `attribute float aEnd; uniform float uTime; uniform vec3 uCam; varying float vA;
+    void main(){ float S = ${BOX}.0; vec3 p = position;
+      p.x = mod(p.x - uCam.x, S) - S * 0.5 + uCam.x; p.z = mod(p.z - uCam.z, S) - S * 0.5 + uCam.z;
+      float y = mod(p.y - uTime * 55.0, 90.0); p.y = max(0.0, uCam.y - 35.0 + y);
+      p.y += aEnd * 1.6; p.x += aEnd * 0.2;
+      vA = (1.0 - clamp(length(p - uCam) / (S * 0.5), 0.0, 1.0)) * 0.45;
+      gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`,
+  fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(0.62, 0.72, 0.90, vA); #include <colorspace_fragment> }`,
+});
+const rain = new THREE.LineSegments(rg2, rainMat); rain.frustumCulled = false; scene.add(rain);
+
+// ============================ city ============================
+const bg = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const idx = Array.from(bg.index.array); idx.splice(18, 6);                 // drop the bottom face: never visible
+const boxIndex = new THREE.BufferAttribute(new Uint16Array(idx), 1);
+const palette = ['#3a4252', '#434b5c', '#363c4a', '#40424f', '#4a4f58', '#2f3541'].map((c) => new THREE.Color(c));
+const cmp = {
+  maps: (a, b) => (b.MapCount || 0) - (a.MapCount || 0) || (b.AwardsReceivedCount || 0) - (a.AwardsReceivedCount || 0) || a.UserId - b.UserId,
+  awards: (a, b) => (b.AwardsReceivedCount || 0) - (a.AwardsReceivedCount || 0) || (b.MapCount || 0) - (a.MapCount || 0) || a.UserId - b.UserId,
+  date: (a, b) => (a.RegisteredAt < b.RegisteredAt ? -1 : a.RegisteredAt > b.RegisteredAt ? 1 : a.UserId - b.UserId),
+};
+let cityGroup = null, chunkList = [], users = [], N = 0, R = 0, G = 1, grid = new Int32Array(1).fill(-1);
+let IX, IZ, IFP, IH, ITOP, lowerNames = [];
+
+function* spiral() {
+  let x = 0, y = 0, dx = 1, dy = 0, seg = 1, run = 0, turns = 0;
+  while (true) { yield [x, y]; x += dx; y += dy; if (++run === seg) { run = 0; [dx, dy] = [-dy, dx]; if (++turns % 2 === 0) seg++; } }
+}
+function makeBatch(arr) {
+  const f = new Float32Array(arr), n = f.length / 11;
+  let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, y1 = 0;
+  for (let o = 0; o < f.length; o += 11) {
+    const hx = f[o + 3] / 2, hz = f[o + 5] / 2;
+    x0 = Math.min(x0, f[o] - hx); x1 = Math.max(x1, f[o] + hx); z0 = Math.min(z0, f[o + 2] - hz); z1 = Math.max(z1, f[o + 2] + hz);
+    y1 = Math.max(y1, f[o + 1] + f[o + 4]);
+  }
+  const ib = new THREE.InstancedInterleavedBuffer(f, 11, 1);
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.setIndex(boxIndex);
+  geo.setAttribute('position', bg.attributes.position); geo.setAttribute('normal', bg.attributes.normal);
+  geo.setAttribute('aPos', new THREE.InterleavedBufferAttribute(ib, 3, 0));
+  geo.setAttribute('aSize', new THREE.InterleavedBufferAttribute(ib, 3, 3));
+  geo.setAttribute('aCol', new THREE.InterleavedBufferAttribute(ib, 3, 6));
+  geo.setAttribute('aMeta', new THREE.InterleavedBufferAttribute(ib, 2, 9));
+  geo.instanceCount = n;
+  const center = new THREE.Vector3((x0 + x1) / 2, y1 / 2, (z0 + z1) / 2);
+  const radius = Math.hypot(x1 - x0, y1, z1 - z0) / 2;
+  geo.boundingSphere = new THREE.Sphere(center, radius);
+  const mesh = new THREE.Mesh(geo, bodyMat); mesh.matrixAutoUpdate = false; cityGroup.add(mesh);
+  return { mesh, center, radius };
+}
+
+function buildCity() {
+  if (cityGroup) { for (const c of chunkList) c.mesh.geometry.dispose(); scene.remove(cityGroup); }
+  cityGroup = new THREE.Group(); scene.add(cityGroup); chunkList = [];
+  outline.visible = false; $('card').style.display = 'none';
+
+  let list = allUsers.filter((u) => (u.MapCount || 0) >= state.minMaps && (u.AwardsReceivedCount || 0) >= state.minAwards);
+  list.sort(cmp[state.order] || cmp.maps);
+  if (state.topN < list.length) list = list.slice(0, state.topN);
+  users = list; N = users.length;
+  lowerNames = users.map((u) => String(u.Name).toLowerCase());
+  $('status').textContent = N ? `${N.toLocaleString()} of ${allUsers.length.toLocaleString()} players${demo ? ' (demo data)' : ''}` : 'No players match these filters';
+  if (!N) { R = 0; G = 1; grid = new Int32Array(1).fill(-1); sigGroup.visible = false; return; }
+
+  const GX = new Int16Array(N), GY = new Int16Array(N), cells = spiral(); R = 0;
+  for (let i = 0; i < N; i++) {
+    let gx, gy;
+    do { [gx, gy] = cells.next().value; } while (mod(gx, 5) === 4 || mod(gy, 5) === 4);   // every 5th line is a street
+    GX[i] = gx; GY[i] = gy; R = Math.max(R, Math.abs(gx), Math.abs(gy));
+  }
+  G = 2 * R + 1; grid = new Int32Array(G * G).fill(-1);
+  IX = new Float32Array(N); IZ = new Float32Array(N); IFP = new Float32Array(N); IH = new Float32Array(N); ITOP = new Float32Array(N);
+
+  const buckets = new Map(), col = new THREE.Color();
+  const push = (a, x, y, z, sx, sy, sz, trim, kind) => a.push(x, y, z, sx, sy, sz, col.r, col.g, col.b, trim, kind);
+  for (let i = 0; i < N; i++) {
+    const u = users[i], maps = u.MapCount || 0, aw = u.AwardsReceivedCount || 0;
+    const gx = GX[i], gy = GY[i], x = gx * LOT, z = gy * LOT;
+    const h = Math.min(220, (2.2 + Math.pow(maps, 0.62) * 1.15) * state.hScale);
+    const tiers = h >= 25 ? 2 : h >= 8 ? 1 : 0;
+    const fp = LOT * ((tiers ? 0.7 : 0.6) + (tiers ? 0.2 : 0.24) * hash(i));
+    const trim = Math.min(1, Math.log10(1 + aw) / 2.2);
+    col.copy(palette[Math.floor(hash(i * 3.1) * palette.length)]).offsetHSL(0, 0, Math.min(0.05, h / 1500) + (hash(i + 5) - 0.5) * 0.03);
+    const key = Math.floor(gx / CH) + ',' + Math.floor(gy / CH);
+    let b = buckets.get(key); if (!b) buckets.set(key, (b = { tall: [], low: [] }));
+    const a = h >= 10 ? b.tall : b.low;
+
+    if (tiers === 0) push(a, x, 0, z, fp, h, fp, trim, 0);
+    else if (tiers === 1) {
+      const m = h * 0.68;
+      push(a, x, 0, z, fp, m, fp, trim, 0); push(a, x, m - 0.7, z, fp * 1.08, 0.7, fp * 1.08, trim, 0);
+      push(a, x, m, z, fp * 0.72, h - m, fp * 0.72, trim, 0);
+    } else {
+      const m1 = h * 0.58, m2 = h * 0.84;
+      push(a, x, 0, z, fp, m1, fp, trim, 0); push(a, x, m1 - 0.7, z, fp * 1.08, 0.7, fp * 1.08, trim, 0);
+      push(a, x, m1, z, fp * 0.74, m2 - m1, fp * 0.74, trim, 0); push(a, x, m2 - 0.6, z, fp * 0.8, 0.6, fp * 0.8, trim, 0);
+      push(a, x, m2, z, fp * 0.5, h - m2, fp * 0.5, trim, 0);
+    }
+    let top = h;
+    if (aw >= 10) { const lh = 2.2 + Math.log2(1 + aw) * 0.35; push(a, x, h, z, fp * 0.26, lh, fp * 0.26, trim, 0); top += lh; }
+    if (aw >= 1) {
+      const ah = 1.5 + Math.log2(1 + aw);
+      push(a, x, top, z, 0.22, ah, 0.22, trim, 1); top += ah;
+      if (aw >= 50) push(a, x, top - 0.3, z, 0.8, 0.8, 0.8, trim, 2);
+    }
+    IX[i] = x; IZ[i] = z; IFP[i] = fp; IH[i] = h; ITOP[i] = top;
+    grid[(gx + R) * G + (gy + R)] = i;
+  }
+  for (const b of buckets.values()) {
+    if (b.tall.length) chunkList.push({ ...makeBatch(b.tall), low: false });
+    if (b.low.length) chunkList.push({ ...makeBatch(b.low), low: true });
+  }
+  if (N > 3) {
+    sigGroup.visible = true;
+    const lamp = new THREE.Vector3(IX[3], ITOP[3] + 1, IZ[3]);
+    lampMesh.position.copy(lamp); beam.position.copy(lamp); disc.position.copy(lamp).addScaledVector(beamDir, BEAM - 10);
+  } else sigGroup.visible = false;
+}
+
+// ============================ camera / selection ============================
+const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)),
+  new THREE.LineBasicMaterial({ color: new THREE.Color(2.0, 1.4, 0.5), fog: false }));
+outline.visible = false; scene.add(outline);
+const camGoal = new THREE.Vector3(), tgtGoal = new THREE.Vector3();
+function flyTo(i, dist) {
+  if (i < 0 || i >= N) return;
+  const d = dist ?? Math.max(28, ITOP[i] * 1.5), fy = IH[i] * 0.4;
+  tgtGoal.set(IX[i], fy, IZ[i]); camGoal.set(IX[i] + d * 0.8, fy + d * 0.6, IZ[i] + d * 0.8);
+}
+function overview() { const s = Math.max(120, R * LOT); tgtGoal.set(0, 0, 0); camGoal.set(0, Math.min(1300, s * 1.5), s * 0.55); }
+controls.addEventListener('start', () => { camGoal.copy(camera.position); tgtGoal.copy(controls.target); });
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function select(i) {
+  const u = users[i], aw = u.AwardsReceivedCount || 0;
+  outline.visible = true; outline.position.set(IX[i], 0, IZ[i]); outline.scale.set(IFP[i] * 1.12, ITOP[i], IFP[i] * 1.12);
+  const style = aw >= 50 ? 'Beacon tower' : aw >= 10 ? 'Lantern crown' : aw >= 1 ? 'Spire' : 'Plain';
+  const joined = u.RegisteredAt ? new Date(u.RegisteredAt).toLocaleDateString() : 'unknown';
+  $('cardBody').innerHTML = `<h2>${esc(u.Name)}</h2><dl>
+    <dt>Maps</dt><dd>${(u.MapCount || 0).toLocaleString()}</dd>
+    <dt>Awards received</dt><dd>${aw.toLocaleString()}</dd>
+    <dt>Position in city</dt><dd>#${(i + 1).toLocaleString()}</dd>
+    <dt>Skyline style</dt><dd>${style}</dd>
+    <dt>Joined</dt><dd>${esc(joined)}</dd></dl>
+    <a href="https://trackmania.exchange/usershow/${u.UserId}" target="_blank" rel="noopener">Open TMX profile</a>`;
+  $('card').style.display = 'block';
+}
+
+// picking: march the mouse ray across the 2D lot grid (a few hundred cheap steps, no per-building raycast)
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function pick(ev) {
+  if (!N) return -1;
+  mouse.set((ev.clientX / innerWidth) * 2 - 1, -(ev.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const o = ray.ray.origin, d = ray.ray.direction;
+  let t = 0;
+  for (let s = 0; s < 2600 && t < 1800; s++) {
+    const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
+    if (y < 0) break;
+    const gx = Math.round(x / LOT), gy = Math.round(z / LOT);
+    if (gx >= -R && gx <= R && gy >= -R && gy <= R) {
+      const i = grid[(gx + R) * G + (gy + R)];
+      if (i >= 0) { const hf = IFP[i] / 2; if (Math.abs(x - IX[i]) <= hf && Math.abs(z - IZ[i]) <= hf && y <= IH[i]) return i; }
+    }
+    t += 0.5 + t * 0.0025;
+  }
+  return -1;
+}
+const tip = $('tip'), cvEl = renderer.domElement; let lastHover = 0, downAt = null;
+cvEl.addEventListener('pointermove', (ev) => {
+  const now = performance.now(); if (now - lastHover < 80 || ev.buttons) return; lastHover = now;
+  const i = pick(ev);
+  if (i < 0) { tip.style.display = 'none'; cvEl.style.cursor = 'default'; return; }
+  tip.textContent = `${users[i].Name} · ${users[i].MapCount || 0} maps`;
+  tip.style.left = ev.clientX + 14 + 'px'; tip.style.top = ev.clientY + 14 + 'px'; tip.style.display = 'block'; cvEl.style.cursor = 'pointer';
+});
+cvEl.addEventListener('pointerdown', (ev) => { downAt = [ev.clientX, ev.clientY]; tip.style.display = 'none'; });
+cvEl.addEventListener('pointerup', (ev) => {
+  if (!downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 5) return;
+  const i = pick(ev); if (i >= 0) select(i);
+});
+
+// keyboard fly: WASD move, Q/E down/up, Shift = fast
+const keys = new Set();
+addEventListener('keydown', (e) => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName || '')) return; keys.add(e.code); });
+addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+const fwd = new THREE.Vector3(), rgt = new THREE.Vector3(), mv = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+function fly(dt) {
+  if (!keys.size) return false;
+  camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); rgt.crossVectors(fwd, UP);
+  mv.set(0, 0, 0);
+  if (keys.has('KeyW') || keys.has('ArrowUp')) mv.add(fwd);
+  if (keys.has('KeyS') || keys.has('ArrowDown')) mv.sub(fwd);
+  if (keys.has('KeyD') || keys.has('ArrowRight')) mv.add(rgt);
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) mv.sub(rgt);
+  if (keys.has('KeyE')) mv.y += 1; if (keys.has('KeyQ')) mv.y -= 1;
+  if (!mv.lengthSq()) return false;
+  mv.normalize().multiplyScalar(state.speed * (1 + camera.position.y / 90) * (keys.has('ShiftLeft') ? 3 : 1) * dt);
+  if (camera.position.y + mv.y < 2) mv.y = 2 - camera.position.y;
+  camera.position.add(mv); controls.target.add(mv);
+  camGoal.copy(camera.position); tgtGoal.copy(controls.target);
+  return true;
+}
+
+// ============================ UI ============================
+const refreshers = [];
+const syncUI = () => refreshers.forEach((f) => f());
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+function section(title, open = true) { const d = el('details'); d.open = open; d.appendChild(el('summary', null, title)); $('settingsBody').appendChild(d); return d; }
+function slider(parent, label, min, max, step, get, set, fmt = String, commit = false) {
+  const row = el('label', 'row'), val = el('span', 'v'), inp = el('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step;
+  row.appendChild(el('span', null, label)); row.appendChild(val); row.appendChild(inp); parent.appendChild(row);
+  const show = () => { inp.value = get(); val.textContent = fmt(+get()); };
+  refreshers.push(show); show();
+  inp.addEventListener('input', () => { val.textContent = fmt(+inp.value); if (!commit) set(+inp.value); });
+  if (commit) inp.addEventListener('change', () => set(+inp.value));
+}
+function button(parent, label, fn) { const b = el('button', 'btn', label); b.addEventListener('click', fn); parent.appendChild(b); return b; }
+function applyLevel(L) {
+  gfx.level = Math.max(0, Math.min(LEVELS.length - 1, L)); Object.assign(gfx, LEVELS[gfx.level]);
+  setRes(gfx.res); syncUI(); save();
+}
+const manual = (key) => (v) => { gfx.auto = false; gfx[key] = v; if (key === 'res') setRes(v); syncUI(); save(); };
+let rbTimer = 0;
+function rebuild() { $('status').textContent = 'Rebuilding the city…'; clearTimeout(rbTimer); rbTimer = setTimeout(() => { buildCity(); flyTo(0, 70); save(); }, 30); }
+
+{
+  const g = section('Graphics');
+  const ac = el('input'); ac.type = 'checkbox'; const acl = el('label', 'check'); acl.appendChild(ac); acl.appendChild(el('span', null, 'Auto quality (recommended)')); g.appendChild(acl);
+  refreshers.push(() => { ac.checked = gfx.auto; });
+  ac.addEventListener('change', () => { gfx.auto = ac.checked; if (gfx.auto) { ceiling = 6; applyLevel(gfx.level); } save(); });
+  slider(g, 'Quality level', 0, 6, 1, () => gfx.level, (v) => { gfx.auto = false; applyLevel(v); }, (v) => ['Potato', 'Very low', 'Low', 'Medium', 'High', 'Very high', 'Ultra'][v]);
+  slider(g, 'Resolution', 0.4, 1.75, 0.05, () => gfx.res, manual('res'), (v) => Math.round(v * 100) + '%');
+  slider(g, 'View distance', 150, 1100, 10, () => gfx.view, manual('view'), (v) => v + ' m');
+  slider(g, 'Fog thickness', 0.5, 1.8, 0.05, () => gfx.fogMul, manual('fogMul'), (v) => v.toFixed(2) + 'x');
+  slider(g, 'Window detail range', 0, 450, 10, () => gfx.win, manual('win'), (v) => (v ? v + ' m' : 'off'));
+  slider(g, 'Rain', 0, RAIN_MAX, 250, () => gfx.rain, manual('rain'), (v) => (v ? v + ' drops' : 'off'));
+  slider(g, 'Glow', 0, 1.5, 0.05, () => gfx.glow, manual('glow'), (v) => (v ? v.toFixed(2) : 'off'));
+  const lc = el('input'); lc.type = 'checkbox'; const lcl = el('label', 'check'); lcl.appendChild(lc); lcl.appendChild(el('span', null, 'Lightning')); g.appendChild(lcl);
+  refreshers.push(() => { lc.checked = gfx.lightning; });
+  lc.addEventListener('change', () => { gfx.lightning = lc.checked; save(); });
+}
+{
+  const c = section('City');
+  const row = el('label', 'row'); row.appendChild(el('span', null, 'Order the city by')); row.appendChild(el('span', 'v'));
+  const sel = el('select');
+  [['maps', 'Maps uploaded'], ['awards', 'Awards received'], ['date', 'Join date (oldest downtown)']].forEach(([v, t]) => { const o = el('option', null, t); o.value = v; sel.appendChild(o); });
+  row.appendChild(sel); c.appendChild(row);
+  refreshers.push(() => { sel.value = state.order; });
+  sel.addEventListener('change', () => { state.order = sel.value; rebuild(); });
+  const mx = allUsers.length;
+  slider(c, 'Players shown (top)', Math.min(200, mx), mx, Math.max(1, Math.round(mx / 200)), () => state.topN, (v) => { state.topN = v; rebuild(); }, (v) => v.toLocaleString(), true);
+  slider(c, 'Minimum maps', 0, 100, 1, () => state.minMaps, (v) => { state.minMaps = v; rebuild(); }, String, true);
+  slider(c, 'Minimum awards', 0, 100, 1, () => state.minAwards, (v) => { state.minAwards = v; rebuild(); }, String, true);
+  slider(c, 'Tower height', 0.5, 2, 0.1, () => state.hScale, (v) => { state.hScale = v; rebuild(); }, (v) => v.toFixed(1) + 'x', true);
+}
+{
+  const c = section('Camera');
+  slider(c, 'Move speed', 20, 300, 5, () => state.speed, (v) => { state.speed = v; save(); }, String);
+  const b = el('div', 'btns'); c.appendChild(b);
+  button(b, 'Downtown', () => flyTo(0, 70));
+  button(b, 'Bat signal', () => flyTo(3, 90));
+  button(b, 'Random player', () => { const i = Math.floor(Math.random() * N); select(i); flyTo(i); });
+  button(b, 'Overview', overview);
+  c.appendChild(el('p', 'hint', 'Drag to orbit, scroll to zoom, WASD to move, Q and E for down and up, Shift for fast.'));
+  const r = el('div', 'btns'); c.appendChild(r);
+  button(r, 'Reset all settings', () => { try { localStorage.removeItem('tmxGotham'); } catch { /* ignore */ } location.reload(); });
+}
+$('tSettings').addEventListener('click', (e) => {
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', on); $('settings').style.display = on ? '' : 'none';
+});
+if (innerWidth < 700) { $('tSettings').setAttribute('aria-pressed', 'false'); $('settings').style.display = 'none'; }
+
+$('search').addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter') return;
+  const q = ev.target.value.trim().toLowerCase(); if (!q) return;
+  let i = lowerNames.indexOf(q); if (i < 0) i = lowerNames.findIndex((n) => n.includes(q));
+  if (i >= 0) { select(i); flyTo(i); return; }
+  const hidden = allUsers.find((u) => String(u.Name).toLowerCase().includes(q));
+  $('status').textContent = hidden
+    ? `${hidden.Name} exists but your filters hide them (${hidden.MapCount || 0} maps, ${hidden.AwardsReceivedCount || 0} awards)`
+    : `No player matching "${ev.target.value}"`;
+});
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); setRes(gfx.res); });
+
+// ============================ go ============================
+setRes(gfx.res);
+if (gfx.auto) applyLevel(gfx.level);
+buildCity();
+flyTo(0, 70);
+controls.target.copy(tgtGoal);
+if (reduced) camera.position.copy(camGoal); else camera.position.set(camGoal.x * 3.2, camGoal.y * 3.4 + 40, camGoal.z * 3.2);
+
+// ============================ loop + auto quality governor ============================
+let t = 0, frame = 0, last = performance.now(), flash = 0, nextFlash = 9 + Math.random() * 8;
+let accMs = 0, nAcc = 0, settle = 2.5, good = 0, ceiling = 6, ceilUntil = 0, fps = 0, drawn = 0;
+renderer.setAnimationLoop(() => {
+  const nowp = performance.now(), rawDt = (nowp - last) / 1000; last = nowp;
+  const dt = Math.min(rawDt, 0.1); t += dt; frame++;
+
+  if (!fly(dt)) {
+    const k = reduced ? 1 : 1 - Math.exp(-dt * 2.2);
+    camera.position.lerp(camGoal, k); controls.target.lerp(tgtGoal, k);
+  }
+  controls.update();
+
+  if (!reduced && gfx.lightning && t > nextFlash) { flash = 1; nextFlash = t + 7 + Math.random() * 16; }
+  flash *= Math.exp(-dt * 5);
+  fogCol.copy(baseFog).multiplyScalar(1 + flash * 2.5);
+
+  // fog and culling both scale with altitude so the overview can still see the whole city
+  const mult = Math.min(3.2, 1 + 0.012 * camera.position.y), view = gfx.view * mult;
+  SH.uFogD.value = (1.8 / view) * gfx.fogMul; SH.uFlash.value = flash; SH.uTime.value = t;
+  SH.uWinDist.value = gfx.win; SH.uDetail.value = gfx.win > 0 ? 1 : 0;
+  sky.position.copy(camera.position);
+  rain.visible = gfx.rain > 0; rg2.setDrawRange(0, gfx.rain * 2);
+  disc.lookAt(camera.position);
+
+  drawn = 0;
+  const lowView = view * 0.65;
+  for (const c of chunkList) {
+    const d = camera.position.distanceTo(c.center) - c.radius;
+    c.mesh.visible = d < (c.low ? lowView : view); if (c.mesh.visible) drawn++;
+  }
+
+  if (gfx.glow > 0.01) { ensureComposer(); bloom.strength = gfx.glow; composer.render(dt); } else renderer.render(scene, camera);
+
+  // governor: reacts in ~1 s. Down when slower than ~40 fps, up after sustained headroom, never retrying a failed level for 25 s
+  if (settle > 0) { settle -= dt; return; }
+  accMs += rawDt * 1000; nAcc++;
+  if (nAcc < 24) return;
+  const avg = accMs / nAcc; accMs = 0; nAcc = 0; fps = 1000 / avg;
+  $('perf').textContent = `${Math.round(fps)} fps · ${Math.round(gfx.res * 100)}% res · ${drawn} of ${chunkList.length} blocks drawn${gfx.auto ? ' · auto' : ''}`;
+  if (!gfx.auto) return;
+  if (t > ceilUntil) ceiling = 6;
+  if (avg > 24 && gfx.level > 0) { ceiling = gfx.level - 1; ceilUntil = t + 25; applyLevel(gfx.level - 1); settle = 0.6; good = 0; }
+  else if (avg < 17.5 && gfx.level < ceiling) { if (++good >= 5) { good = 0; applyLevel(gfx.level + 1); settle = 0.6; } }
+  else good = 0;
+});
+</script>
+</body>
+</html>

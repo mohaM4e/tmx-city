@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TMX City – every Trackmania Exchange mapper as a building</title>
+<meta name="description" content="Explore every Trackmania Exchange mapper as a building in a 3D city. Height is maps uploaded, gold trim is awards. Walk it, drive it, watch the day turn to night.">
+<meta name="theme-color" content="#0e1116">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<header class="topbar">
+  <a class="brand" href="./" aria-label="TMX City">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V10l5-3v14M8 21V5l6-2v18M14 21V9l7 3v9"/></svg><span>TMX City</span>
+  </a>
+  <div class="search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input id="search" type="search" placeholder="Find a mapper   ( / )" autocomplete="off" spellcheck="false"
+           role="combobox" aria-expanded="false" aria-controls="suggest" aria-label="Find a player">
+    <ul id="suggest" role="listbox" hidden></ul>
+  </div>
+  <nav class="actions" aria-label="Tools">
+    <button id="bLink" class="icon" title="Copy a link to this view (L)" aria-label="Copy link"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg></button>
+    <button id="bPhoto" class="icon" title="Save a screenshot (P)" aria-label="Screenshot"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.5"/><path d="M9 7l1.5-3h3L15 7"/></svg></button>
+    <button id="bSound" class="icon" title="City sound (M)" aria-label="Sound" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3zM16 9a4 4 0 0 1 0 6"/></svg></button>
+    <button id="bHelp" class="icon" title="Controls (H)" aria-label="Controls"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17v.01"/></svg></button>
+    <button id="bSettings" class="icon" title="Settings (G)" aria-label="Settings" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+  </nav>
+</header>
+
+<div id="sign" class="sign" aria-live="polite"><strong id="signStreet">Main St</strong><span id="signDistrict">Downtown</span></div>
+
+<aside id="board" class="card"><h2>Top builders</h2><ol id="boardList"></ol></aside>
+<div id="mini" class="card"><canvas id="miniCanvas" width="220" height="220" aria-label="City minimap, click to travel"></canvas><span class="n">N</span></div>
+
+<div id="modes" class="seg" role="group" aria-label="Camera mode">
+  <button data-mode="orbit" aria-pressed="true"><kbd>1</kbd>Orbit</button>
+  <button data-mode="fly" aria-pressed="false"><kbd>2</kbd>Fly</button>
+  <button data-mode="walk" aria-pressed="false"><kbd>3</kbd>Walk</button>
+  <button data-mode="drive" aria-pressed="false"><kbd>4</kbd>Drive</button>
+</div>
+<div id="hint" class="hint" hidden></div>
+<div id="speed" class="speed" hidden><b id="speedNum">0</b><span>km/h</span></div>
+
+<section id="info" class="card info" hidden aria-label="Selected player"></section>
+
+<aside id="drawer" class="drawer" hidden aria-label="Settings">
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div id="tabBody"></div>
+</aside>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="help" class="modal" hidden role="dialog" aria-modal="true" aria-label="Controls"><div class="sheet" id="helpSheet"></div></div>
+<div id="loading" class="loading"><div class="box">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V10l5-3v14M8 21V5l6-2v18M14 21V9l7 3v9"/></svg>
+  <h1>TMX City</h1><p id="loadMsg">Starting…</p><div class="bar"><i id="loadBar"></i></div>
+</div></div>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;color:#fff;background:#0e1116">TMX City needs JavaScript and WebGL.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

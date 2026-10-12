@@ -1,0 +1,11 @@
+{
+  "name": "tmx-city",
+  "version": "1.0.0",
+  "description": "Trackmania Exchange users as buildings in a 3D city",
+  "type": "module",
+  "scripts": {
+    "fetch": "node fetch-users.js",
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,7 @@
+node_modules/
+package-lock.json.bak
+public/users.json
+public/users.json.tmp
+test/.bundle.mjs
+.DS_Store
+*.log

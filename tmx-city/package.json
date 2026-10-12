@@ -1,0 +1,18 @@
+{
+  "name": "tmx-city",
+  "version": "2.0.0",
+  "description": "Every Trackmania Exchange mapper as a building in an explorable 3D city. Walk it, drive it, watch day turn to night.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["trackmania", "trackmania-exchange", "threejs", "webgl", "3d-city", "data-visualization", "visualization"],
+  "scripts": {
+    "fetch": "node scripts/fetch-users.js",
+    "start": "node scripts/serve.js",
+    "test": "node test/smoke.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "three": "0.160.0"
+  }
+}
